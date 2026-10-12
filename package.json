@@ -1,0 +1,30 @@
+{
+  "name": "niche-lead-scout",
+  "version": "1.0.0",
+  "description": "AI-Powered Niche Competitor Discovery, SEO Analytics & Autonomous Email Outreach Engine",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "share": "node server.js --tunnel",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "seo",
+    "competitor-analysis",
+    "lead-generation",
+    "cold-outreach",
+    "ai-autoresponder",
+    "tunnel"
+  ],
+  "author": "Antigravity AI",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "cheerio": "^1.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "localtunnel": "^2.0.2",
+    "nodemailer": "^6.9.16"
+  }
+}
