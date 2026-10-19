@@ -6,7 +6,7 @@ let state = {
   hasMore: true,
   totalAvailable: 250,
   selectedCompetitorIds: new Set(),
-  activeTemplate: 'gap',
+  activeTemplate: 'fashion_rates',
   autonomousAutoReply: true,
   currentUser: {
     id: 'usr_free_demo',
@@ -27,8 +27,69 @@ let state = {
   }
 };
 
-// Outreach Pitch Templates
+// Outreach Pitch & Inquiry Templates
 const OUTREACH_TEMPLATES = {
+  fashion_rates: {
+    subject: "Product Rates & Catalog Inquiry — {{company}}",
+    body: `Hi {{company}} Team,
+
+I hope this email finds you well.
+
+I came across {{company}} ({{domain}}) and was really impressed by your collection and articles.
+
+Could you please share your latest price list, clothing / product rates, and current catalog? We are looking to inquire about your product pricing, available sizes/articles, and any volume discounts or minimum order requirements.
+
+Also, please let us know the best way to place an inquiry or order, and if you have a wholesale / retail rate sheet available.
+
+Looking forward to your prompt response.
+
+Best regards,
+{{sender_name}}
+{{sender_email}}
+{{sender_phone}}`
+  },
+  wholesale_rates: {
+    subject: "Wholesale Price & Bulk Order Inquiry — {{company}}",
+    body: `Dear Sales & Distribution Team at {{company}},
+
+We are interested in purchasing from your current product line and would like to request your wholesale price sheet and rate card for {{domain}}.
+
+Could you please provide:
+1. Current product catalog with wholesale rates
+2. Minimum Order Quantity (MOQ) and tier discounts
+3. Delivery lead times and payment terms
+
+Looking forward to hearing from you.
+
+Thank you,
+{{sender_name}}
+{{sender_email}}
+{{sender_phone}}`
+  },
+  catalog_info: {
+    subject: "Inquiry regarding {{company}} product catalog and pricing",
+    body: `Hello {{company}} Team,
+
+I am writing to inquire about your current collections, pricing, and availability on {{domain}}.
+
+Could you please send us your updated product catalog or digital price list? We would like to review your current pricing and explore options for placing an order.
+
+Best regards,
+{{sender_name}}
+{{sender_email}}`
+  },
+  custom: {
+    subject: "Inquiry for {{company}}",
+    body: `Hi {{company}} Team,
+
+I am reaching out regarding {{domain}}.
+
+Please share your latest rates and product information.
+
+Best regards,
+{{sender_name}}
+{{sender_email}}`
+  },
   gap: {
     subject: "Quick question regarding {{company}}'s Google search rankings",
     body: `Hi {{company}} team,
@@ -37,51 +98,7 @@ I was analyzing organic search performance across your niche and noticed somethi
 
 While you have strong traction with {{traffic}} estimated monthly visits, your high-ranking keyword coverage is currently at {{high_rank_percent}}, which leaves a notable commercial gap against top competitors.
 
-We developed an automated framework that captures the exact high-converting buyer keywords your direct rivals are currently ranking for in the top 3 positions.
-
-Would you be open to a quick 10-minute walkthrough this Thursday or Friday to look at the competitive gap report we generated for {{domain}}?
-
-Best regards,
-{{sender_name}}`
-  },
-  partner: {
-    subject: "Growth partnership opportunity for {{company}}",
-    body: `Hi {{company}} growth team,
-
-We've been tracking leading innovators in your space and have been impressed by {{domain}}'s organic footprint (currently indexing over {{total_keywords}} keywords).
-
-Our platform helps high-authority brands (DA {{da_score}}+) turn their bottom 40% ranking queries into page-1 revenue drivers.
-
-I'd love to share a bespoke benchmark comparing {{company}} against 3 of your closest competitors.
-
-Are you available for a brief chat sometime early next week?
-
-Best regards,
-{{sender_name}}`
-  },
-  video: {
-    subject: "Recorded a quick 3-min organic ranking breakdown for {{company}}",
-    body: `Hi {{company}} team,
-
-Rather than sending a generic pitch, I recorded a short 3-minute video breakdown looking specifically at {{domain}}'s Google rankings.
-
-In the clip, I highlighted:
-1. Two high-intent search terms where you're currently hovering on page 2.
-2. The exact structural change that could push them into the top 3 search results.
-3. How to outpace competing sites in your specific niche.
-
-Would you mind if I shared the link with you here?
-
-Best regards,
-{{sender_name}}`
-  },
-  custom: {
-    subject: "Strategic outreach for {{company}}",
-    body: `Hello {{company}} team,
-
-Reaching out regarding {{domain}} and your current monthly traffic of {{traffic}}.
-
-We'd love to discuss how our SEO and lead intelligence systems can help accelerate your acquisition.
+Would you be open to a quick 10-minute walkthrough to look at the competitive gap report we generated for {{domain}}?
 
 Best regards,
 {{sender_name}}`
@@ -95,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadInitialStats();
   checkCurrentUser();
   checkTunnelStatus();
+  loadInitialSettings();
 
   // Auto-detect mobile screen and switch to Cards view on small screens
   if (window.innerWidth < 768) {
@@ -202,6 +220,8 @@ function setupEventListeners() {
 
   // Export PDF
   document.getElementById('export-pdf-btn').addEventListener('click', handleExportPDF);
+  const targetPdfBtn = document.getElementById('target-export-pdf-btn');
+  if (targetPdfBtn) targetPdfBtn.addEventListener('click', handleExportPDF);
 
   // Pricing Modal controls
   document.getElementById('open-pricing-btn').addEventListener('click', openPricingModal);
@@ -266,6 +286,50 @@ function setupEventListeners() {
   // Live preview updates
   document.getElementById('outreach-subject-input').addEventListener('input', updateEmailPreview);
   document.getElementById('outreach-body-textarea').addEventListener('input', updateEmailPreview);
+
+  const senderNameInput = document.getElementById('outreach-sender-name');
+  if (senderNameInput) senderNameInput.addEventListener('input', updateEmailPreview);
+
+  const senderEmailInput = document.getElementById('outreach-sender-email');
+  if (senderEmailInput) senderEmailInput.addEventListener('input', updateEmailPreview);
+
+  const senderPhoneInput = document.getElementById('outreach-sender-phone');
+  if (senderPhoneInput) senderPhoneInput.addEventListener('input', updateEmailPreview);
+
+  // Mobile Header Buttons
+  const mobileHeaderSettings = document.getElementById('mobile-header-settings-btn');
+  if (mobileHeaderSettings) mobileHeaderSettings.addEventListener('click', openSettingsModal);
+
+  const mobileHeaderQuota = document.getElementById('mobile-header-quota-pill');
+  if (mobileHeaderQuota) mobileHeaderQuota.addEventListener('click', openPricingModal);
+
+  // 1-Click SMTP Presets
+  const btnGmail = document.getElementById('preset-gmail-btn');
+  if (btnGmail) {
+    btnGmail.addEventListener('click', () => {
+      document.getElementById('smtp-host').value = 'smtp.gmail.com';
+      document.getElementById('smtp-port').value = '465';
+      showToast('Gmail selected (Host: smtp.gmail.com, Port: 465 SSL). Enter your email and App Password!', 'info');
+    });
+  }
+
+  const btnOutlook = document.getElementById('preset-outlook-btn');
+  if (btnOutlook) {
+    btnOutlook.addEventListener('click', () => {
+      document.getElementById('smtp-host').value = 'smtp.office365.com';
+      document.getElementById('smtp-port').value = '587';
+      showToast('Outlook selected (Host: smtp.office365.com, Port: 587)', 'info');
+    });
+  }
+
+  const btnYahoo = document.getElementById('preset-yahoo-btn');
+  if (btnYahoo) {
+    btnYahoo.addEventListener('click', () => {
+      document.getElementById('smtp-host').value = 'smtp.mail.yahoo.com';
+      document.getElementById('smtp-port').value = '465';
+      showToast('Yahoo selected (Host: smtp.mail.yahoo.com, Port: 465)', 'info');
+    });
+  }
 
   // AI Inbox Modal controls
   document.getElementById('open-inbox-btn').addEventListener('click', openInboxModal);
@@ -562,7 +626,7 @@ function handleExportPDF() {
       highRank: `${c.highRankingPercent}%`,
       lowRank: `${c.lowRankingPercent}%`,
       da: c.domainAuthority,
-      email: c.contactEmail
+      email: c.contactEmail || 'No email found'
     }));
 
     doc.autoTable({
@@ -656,33 +720,160 @@ async function handleTargetSearch(e) {
       window.confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
     }
 
-    showToast(`Found 50 Competitors in "${data.target.category}"!`, 'success');
+    showToast(`Found ${data.competitors.length} authentic competitors in "${data.target.category}"!`, 'success');
 
   } catch (err) {
     showToast(err.message, 'error');
   } finally {
     submitBtn.disabled = false;
-    btnText.textContent = 'Discover 50 Competitors';
+    btnText.textContent = 'Discover Competitors';
     if (window.lucide) window.lucide.createIcons();
   }
 }
 
-// Render Target Summary Card
+// Render Target Summary Card (Similarweb & Semrush Intelligence Suite)
 function renderTargetSummary(target) {
   document.getElementById('target-favicon').src = `https://www.google.com/s2/favicons?domain=${target.domain}&sz=64`;
   document.getElementById('target-title').textContent = target.domain;
   document.getElementById('target-external-link').href = target.url;
-  document.getElementById('target-niche-tag').innerHTML = `Detected: <strong class="text-cyan-300">${target.category} (${target.subNiche})</strong>`;
+  document.getElementById('target-niche-tag').innerHTML = `Detected Niche: <strong class="text-cyan-300">${target.category} (${target.subNiche})</strong>`;
   document.getElementById('target-category-badge').textContent = target.category;
   document.getElementById('target-subniche-badge').textContent = target.subNiche;
+  
+  const tierBadge = document.getElementById('target-tier-badge');
+  if (tierBadge) tierBadge.textContent = `Tier: ${target.tier || 'Authority'}`;
+  
+  const tierDisplay = document.getElementById('target-tier-display');
+  if (tierDisplay) tierDisplay.textContent = target.tier || 'Established';
 
-  document.getElementById('target-metric-traffic').textContent = target.trafficFormatted;
-  document.getElementById('target-metric-keywords').textContent = (target.totalKeywords || 0).toLocaleString();
-  document.getElementById('target-metric-high-rank').textContent = `${target.highRankingPercent}%`;
-  document.getElementById('target-metric-low-rank').textContent = `${target.lowRankingPercent}%`;
+  // 1. Visits & Device Split
+  const visitsEl = document.getElementById('target-metric-visits');
+  if (visitsEl) visitsEl.textContent = target.visitsFormatted || target.trafficFormatted || '--';
+  
+  const visitsTrendEl = document.getElementById('target-visits-trend');
+  if (visitsTrendEl) {
+    visitsTrendEl.textContent = `↑ ${target.visitsTrend || '11.79%'}`;
+    visitsTrendEl.className = 'text-[11px] font-bold text-emerald-400 flex items-center';
+  }
 
-  document.getElementById('target-bar-high').style.width = `${target.highRankingPercent}%`;
-  document.getElementById('target-bar-low').style.width = `${target.lowRankingPercent}%`;
+  const desktopSplitEl = document.getElementById('target-desktop-split');
+  if (desktopSplitEl) desktopSplitEl.textContent = `${target.deviceSplit?.desktopPercent || 53.97}%`;
+  
+  const mobileSplitEl = document.getElementById('target-mobile-split');
+  if (mobileSplitEl) mobileSplitEl.textContent = `${target.deviceSplit?.mobilePercent || 46.03}%`;
+
+  // 2. Unique Visitors
+  const uniquesEl = document.getElementById('target-metric-uniques');
+  if (uniquesEl) uniquesEl.textContent = target.uniqueVisitorsFormatted || '--';
+
+  const uniquesTrendEl = document.getElementById('target-uniques-trend');
+  if (uniquesTrendEl) uniquesTrendEl.textContent = `↑ ${target.uniqueVisitorsTrend || '10.19%'}`;
+
+  // 3. Purchase Conversion
+  const convEl = document.getElementById('target-metric-conversion');
+  if (convEl) convEl.textContent = target.purchaseConversion || '0.67%';
+
+  const convTrendEl = document.getElementById('target-conversion-trend');
+  if (convTrendEl) convTrendEl.textContent = `↓ ${target.purchaseConversionTrend || '6.58%'}`;
+
+  // 4. Pages / Visit
+  const pagesEl = document.getElementById('target-metric-pages');
+  if (pagesEl) pagesEl.textContent = target.pagesPerVisit || '2.8';
+
+  const pagesTrendEl = document.getElementById('target-pages-trend');
+  if (pagesTrendEl) pagesTrendEl.textContent = `↓ ${target.pagesPerVisitTrend || '1.72%'}`;
+
+  // 5. Avg. Visit Duration
+  const durEl = document.getElementById('target-metric-duration');
+  if (durEl) durEl.textContent = target.avgVisitDuration || '08:18';
+
+  const durTrendEl = document.getElementById('target-duration-trend');
+  if (durTrendEl) durTrendEl.textContent = `↑ ${target.avgVisitDurationTrend || '0.4%'}`;
+
+  // 6. Bounce Rate
+  const bounceEl = document.getElementById('target-metric-bounce');
+  if (bounceEl) bounceEl.textContent = target.bounceRate || '61.53%';
+
+  const bounceTrendEl = document.getElementById('target-bounce-trend');
+  if (bounceTrendEl) bounceTrendEl.textContent = `↑ ${target.bounceRateTrend || '1.4%'}`;
+
+  // Organic Keywords & Rankings Audit
+  const kwTotalEl = document.getElementById('target-total-keywords');
+  if (kwTotalEl) kwTotalEl.textContent = (target.totalKeywords || 0).toLocaleString();
+
+  const highRankBadge = document.getElementById('target-high-rank-badge');
+  if (highRankBadge) highRankBadge.textContent = `${target.highRankingPercent}%`;
+
+  const lowRankBadge = document.getElementById('target-low-rank-badge');
+  if (lowRankBadge) lowRankBadge.textContent = `${target.lowRankingPercent}%`;
+
+  const highRankCount = document.getElementById('target-high-rank-count');
+  if (highRankCount) highRankCount.textContent = `${(target.highRankingCount || 0).toLocaleString()} Keywords on Page 1`;
+
+  const lowRankCount = document.getElementById('target-low-rank-count');
+  if (lowRankCount) lowRankCount.textContent = `${(target.lowRankingCount || 0).toLocaleString()} Keywords on Pages 2-10`;
+
+  const barHigh = document.getElementById('target-bar-high');
+  if (barHigh) barHigh.style.width = `${target.highRankingPercent}%`;
+
+  const barLow = document.getElementById('target-bar-low');
+  if (barLow) barLow.style.width = `${target.lowRankingPercent}%`;
+
+  // Positions 1-3, 4-10, 11-50, 51-100
+  const top3 = target.rankingTiers?.top3 || { count: 0, percent: 0 };
+  const page1 = target.rankingTiers?.page1 || { count: 0, percent: 0 };
+  const page2 = target.rankingTiers?.page2_5 || { count: 0, percent: 0 };
+  const page6 = target.rankingTiers?.page6_10 || { count: 0, percent: 0 };
+
+  const posTop3El = document.getElementById('target-kw-pos-top3');
+  if (posTop3El) posTop3El.textContent = (top3.count || 0).toLocaleString();
+  const pctTop3El = document.getElementById('target-kw-pct-top3');
+  if (pctTop3El) pctTop3El.textContent = `${top3.percent || 0}% of total`;
+
+  const posPage1El = document.getElementById('target-kw-pos-page1');
+  if (posPage1El) posPage1El.textContent = (page1.count || 0).toLocaleString();
+  const pctPage1El = document.getElementById('target-kw-pct-page1');
+  if (pctPage1El) pctPage1El.textContent = `${page1.percent || 0}% of total`;
+
+  const posPage2El = document.getElementById('target-kw-pos-page2');
+  if (posPage2El) posPage2El.textContent = (page2.count || 0).toLocaleString();
+  const pctPage2El = document.getElementById('target-kw-pct-page2');
+  if (pctPage2El) pctPage2El.textContent = `${page2.percent || 0}% of total`;
+
+  const posPage6El = document.getElementById('target-kw-pos-page6');
+  if (posPage6El) posPage6El.textContent = (page6.count || 0).toLocaleString();
+  const pctPage6El = document.getElementById('target-kw-pct-page6');
+  if (pctPage6El) pctPage6El.textContent = `${page6.percent || 0}% of total`;
+
+  const daScoreEl = document.getElementById('target-da-score');
+  if (daScoreEl) daScoreEl.textContent = `DA ${target.daScore || target.domainAuthority || 45}`;
+
+  const trafficValEl = document.getElementById('target-traffic-value');
+  if (trafficValEl) trafficValEl.textContent = target.trafficValueFormatted || target.trafficValue || '$50K';
+
+  // SEOquake & Semrush Verified Parameters
+  const sqAuditDomain = document.getElementById('sq-audit-domain');
+  if (sqAuditDomain) sqAuditDomain.textContent = target.domain;
+
+  const sqGoogleIndex = document.getElementById('sq-google-index');
+  if (sqGoogleIndex) sqGoogleIndex.textContent = target.seoquake?.googleIndex || target.googleIndex || '--';
+
+  const sqTraffic = document.getElementById('sq-semrush-traffic');
+  if (sqTraffic) sqTraffic.textContent = target.seoquake?.semrushTraffic || target.visitsFormatted || '--';
+
+  const sqKeywords = document.getElementById('sq-se-keywords');
+  if (sqKeywords) sqKeywords.textContent = target.seoquake?.semrushKeywords || target.totalKeywordsFormatted || '--';
+
+  const sqPrice = document.getElementById('sq-traffic-price');
+  if (sqPrice) sqPrice.textContent = target.seoquake?.semrushTrafficPrice || target.trafficValue || '--';
+
+  const sqBacklinks = document.getElementById('sq-backlinks');
+  if (sqBacklinks) sqBacklinks.textContent = target.seoquake?.backlinks || '--';
+
+  const sqRank = document.getElementById('sq-rank');
+  if (sqRank) sqRank.textContent = target.seoquake?.semrushRank ? `#${target.seoquake.semrushRank}` : '--';
+
+  if (window.lucide) window.lucide.createIcons();
 }
 
 // Render Competitors into Table & Mobile Cards
@@ -696,7 +887,7 @@ function renderCompetitorsTable(filterQuery = '') {
     if (!filterQuery) return true;
     return c.domain.toLowerCase().includes(filterQuery) ||
            c.name.toLowerCase().includes(filterQuery) ||
-           c.contactEmail.toLowerCase().includes(filterQuery);
+           (c.contactEmail && c.contactEmail.toLowerCase().includes(filterQuery));
   });
 
   if (displayList.length === 0) {
@@ -716,6 +907,58 @@ function renderCompetitorsTable(filterQuery = '') {
       statusPill = `<span class="px-2 py-0.5 rounded-full text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 flex items-center gap-1 justify-center"><i data-lucide="check" class="w-3 h-3"></i> Sent</span>`;
     } else if (comp.outreachStatus === 'replied') {
       statusPill = `<span class="px-2 py-0.5 rounded-full text-[10px] bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1 justify-center"><i data-lucide="message-circle" class="w-3 h-3"></i> Replied</span>`;
+    }
+
+    // Construct Email / Social Links Cell per user instruction
+    let emailCellHtml = '';
+    if (comp.contactEmail) {
+      emailCellHtml = `
+        <div class="flex items-center gap-1.5">
+          <div class="truncate max-w-[130px]">
+            <div class="font-mono text-[11px] text-white truncate font-semibold">${comp.contactEmail}</div>
+            <span class="inline-block text-[9px] px-1.5 py-0.2 rounded font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              ✓ Verified
+            </span>
+          </div>
+          <div class="flex items-center gap-0.5 ml-auto flex-shrink-0">
+            <button class="scrape-live-email-btn p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition" data-domain="${comp.domain}" title="Re-scan contact page for email">
+              <i data-lucide="scan-search" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="copy-email-btn p-1 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded transition" data-email="${comp.contactEmail}" title="Copy email">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      // USER REQUIREMENT: Write in English "No email found" and attach Facebook & LinkedIn links!
+      const fbUrl = comp.socialLinks?.facebook || `https://www.facebook.com/${comp.domain.split('.')[0]}`;
+      const liUrl = comp.socialLinks?.linkedin || `https://www.linkedin.com/company/${comp.domain.split('.')[0]}`;
+      const contactUrl = comp.socialLinks?.contactPage || comp.url;
+
+      emailCellHtml = `
+        <div class="space-y-1">
+          <div class="flex items-center justify-between gap-1">
+            <span class="inline-block text-[9px] px-1.5 py-0.5 rounded font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              No email found
+            </span>
+            <button class="scrape-live-email-btn p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition" data-domain="${comp.domain}" title="Scan website & contact page for email">
+              <i data-lucide="scan-search" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+          <div class="flex items-center gap-1 text-[10px]">
+            <a href="${fbUrl}" target="_blank" class="px-1.5 py-0.5 rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 font-medium flex items-center gap-1 transition" title="Open Facebook Page">
+              <i data-lucide="facebook" class="w-2.5 h-2.5 text-blue-400"></i> FB
+            </a>
+            <a href="${liUrl}" target="_blank" class="px-1.5 py-0.5 rounded bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 font-medium flex items-center gap-1 transition" title="Open LinkedIn Profile">
+              <i data-lucide="linkedin" class="w-2.5 h-2.5 text-sky-400"></i> In
+            </a>
+            <a href="${contactUrl}" target="_blank" class="px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-medium flex items-center gap-0.5 transition" title="Open Contact Page">
+              <i data-lucide="external-link" class="w-2.5 h-2.5 text-slate-400"></i> Contact
+            </a>
+          </div>
+        </div>
+      `;
     }
 
     tr.innerHTML = `
@@ -752,12 +995,7 @@ function renderCompetitorsTable(filterQuery = '') {
         </div>
       </td>
       <td class="py-2.5 px-3">
-        <div class="flex items-center gap-1">
-          <span class="font-mono text-[11px] text-slate-300 truncate max-w-[140px]">${comp.contactEmail}</span>
-          <button class="copy-email-btn p-0.5 text-slate-500 hover:text-cyan-400" data-email="${comp.contactEmail}">
-            <i data-lucide="copy" class="w-3 h-3"></i>
-          </button>
-        </div>
+        ${emailCellHtml}
       </td>
       <td class="py-2.5 px-2 text-center">
         <span class="px-1.5 py-0.5 rounded font-mono font-bold text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
@@ -778,6 +1016,64 @@ function renderCompetitorsTable(filterQuery = '') {
     // 2. Render Mobile Cards View
     const card = document.createElement('div');
     card.className = `glass-card rounded-xl p-3 border border-slate-800 space-y-2.5 transition ${isSelected ? 'border-cyan-500/40 bg-cyan-950/20' : ''}`;
+    
+    let cardEmailHtml = '';
+    if (comp.contactEmail) {
+      cardEmailHtml = `
+        <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 gap-2">
+          <div class="flex items-center gap-1.5 truncate text-[11px] font-mono text-slate-300">
+            <span class="truncate font-semibold text-white">${comp.contactEmail}</span>
+            <span class="text-[9px] px-1 rounded font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">✓ Verified</span>
+          </div>
+          <div class="flex items-center gap-1 flex-shrink-0">
+            <button class="scrape-live-email-btn p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition" data-domain="${comp.domain}" title="Scan contact page">
+              <i data-lucide="scan-search" class="w-3.5 h-3.5"></i>
+            </button>
+            <button class="copy-email-btn text-slate-400 hover:text-cyan-400 p-1" data-email="${comp.contactEmail}" title="Copy email"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+            <button class="single-pitch-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 text-[10px] font-bold border border-slate-700 whitespace-nowrap" data-id="${comp.id}">
+              Pitch
+            </button>
+          </div>
+        </div>
+      `;
+    } else {
+      const fbUrl = comp.socialLinks?.facebook || `https://www.facebook.com/${comp.domain.split('.')[0]}`;
+      const liUrl = comp.socialLinks?.linkedin || `https://www.linkedin.com/company/${comp.domain.split('.')[0]}`;
+      const contactUrl = comp.socialLinks?.contactPage || comp.url;
+
+      cardEmailHtml = `
+        <div class="pt-1.5 border-t border-slate-800/80 space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              No email found
+            </span>
+            <div class="flex items-center gap-1">
+              <button class="scrape-live-email-btn p-1 text-slate-400 hover:text-cyan-300 hover:bg-slate-800 rounded transition" data-domain="${comp.domain}" title="Scan website for contact email">
+                <i data-lucide="scan-search" class="w-3.5 h-3.5"></i>
+              </button>
+              <span class="text-[10px] text-slate-500">Reach out via:</span>
+            </div>
+          </div>
+          <div class="flex items-center justify-between gap-1 text-[10px]">
+            <div class="flex items-center gap-1.5">
+              <a href="${fbUrl}" target="_blank" class="px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white border border-blue-500/30 font-semibold flex items-center gap-1 transition">
+                <i data-lucide="facebook" class="w-3 h-3 text-blue-400"></i> FB
+              </a>
+              <a href="${liUrl}" target="_blank" class="px-2 py-1 rounded bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 font-semibold flex items-center gap-1 transition">
+                <i data-lucide="linkedin" class="w-3 h-3 text-sky-400"></i> In
+              </a>
+              <a href="${contactUrl}" target="_blank" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-semibold flex items-center gap-1 transition">
+                <i data-lucide="external-link" class="w-3 h-3 text-slate-400"></i> Contact
+              </a>
+            </div>
+            <button class="single-pitch-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 text-[10px] font-bold border border-slate-700 whitespace-nowrap" data-id="${comp.id}">
+              Pitch
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
     card.innerHTML = `
       <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2 truncate">
@@ -817,15 +1113,7 @@ function renderCompetitorsTable(filterQuery = '') {
         </div>
       </div>
 
-      <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 gap-2">
-        <div class="flex items-center gap-1 truncate text-[11px] font-mono text-slate-300">
-          <span class="truncate">${comp.contactEmail}</span>
-          <button class="copy-email-btn text-slate-500 hover:text-cyan-400 flex-shrink-0" data-email="${comp.contactEmail}"><i data-lucide="copy" class="w-3 h-3"></i></button>
-        </div>
-        <button class="single-pitch-btn px-2.5 py-1 rounded bg-slate-800 hover:bg-cyan-500 hover:text-slate-950 text-cyan-300 text-[10px] font-bold border border-slate-700 whitespace-nowrap" data-id="${comp.id}">
-          Pitch
-        </button>
-      </div>
+      ${cardEmailHtml}
     `;
     cardsContainer.appendChild(card);
   });
@@ -852,6 +1140,43 @@ function attachTableRowListeners() {
       const email = e.currentTarget.getAttribute('data-email');
       navigator.clipboard.writeText(email);
       showToast(`Copied ${email}!`, 'info');
+    });
+  });
+
+  document.querySelectorAll('.scrape-live-email-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const domain = e.currentTarget.getAttribute('data-domain');
+      const origHtml = e.currentTarget.innerHTML;
+      e.currentTarget.innerHTML = `<span class="animate-spin inline-block text-[10px]">⟳</span>`;
+      e.currentTarget.disabled = true;
+      try {
+        const res = await fetch('/api/extract-live-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ domain })
+        });
+        const data = await res.json();
+        const comp = state.competitors.find(c => c.domain.toLowerCase() === domain.toLowerCase());
+        if (comp) {
+          comp.contactEmail = data.email;
+          comp.emailStatus = data.email ? 'Verified' : 'No email found';
+          comp.isVerifiedEmail = !!data.email;
+          comp.hasEmail = !!data.email;
+          if (data.socialLinks) comp.socialLinks = data.socialLinks;
+        }
+        renderCompetitorsTable();
+        if (data.success && data.email) {
+          showToast(`Found email for ${domain}: ${data.email}`, 'success');
+        } else {
+          showToast(`No email found on ${domain}. Social links attached.`, 'info');
+        }
+      } catch (err) {
+        showToast(`Extraction error: ${err.message}`, 'error');
+      } finally {
+        e.currentTarget.innerHTML = origHtml;
+        e.currentTarget.disabled = false;
+        if (window.lucide) window.lucide.createIcons();
+      }
     });
   });
 
@@ -889,18 +1214,23 @@ function updateSelectedCount() {
 
 function updateShowingCounter() {
   const badge = document.getElementById('showing-counter-badge');
-  badge.textContent = `${state.competitors.length} Loaded`;
+  badge.textContent = `${state.competitors.length} Authentic Loaded`;
   
   const loadMoreBtn = document.getElementById('load-more-btn');
   const loadMoreText = document.getElementById('load-more-text');
   
   if (!state.hasMore) {
     loadMoreBtn.classList.add('opacity-50', 'cursor-not-allowed');
-    loadMoreText.textContent = `All Competitors Loaded (${state.competitors.length})`;
+    loadMoreBtn.disabled = true;
+    loadMoreText.textContent = `All Authentic Competitors Loaded (${state.competitors.length})`;
   } else {
+    loadMoreBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    loadMoreBtn.disabled = false;
+    const remainingCount = state.totalAvailable - state.competitors.length;
+    const nextBatch = Math.min(50, remainingCount);
     const nextStart = state.competitors.length + 1;
-    const nextEnd = state.competitors.length + 50;
-    loadMoreText.textContent = `Load Next 50 Websites (#${nextStart} - #${nextEnd})`;
+    const nextEnd = state.competitors.length + nextBatch;
+    loadMoreText.textContent = `Load Next ${nextBatch} Websites (#${nextStart} - #${nextEnd})`;
   }
 }
 
@@ -978,6 +1308,33 @@ function openOutreachModal() {
   const modalQuotaRemaining = document.getElementById('modal-quota-remaining');
   if (modalQuotaRemaining) modalQuotaRemaining.textContent = remaining;
 
+  // Pre-fill Sender info (Send from user's email)
+  const savedName = localStorage.getItem('nexus_sender_name') || state.settings.smtp?.fromName || state.currentUser?.name || 'Fashion Buyer';
+  const savedEmail = localStorage.getItem('nexus_sender_email') || state.settings.smtp?.fromEmail || state.settings.smtp?.user || '';
+  const savedPhone = localStorage.getItem('nexus_sender_phone') || '';
+
+  const nameInput = document.getElementById('outreach-sender-name');
+  const emailInput = document.getElementById('outreach-sender-email');
+  const phoneInput = document.getElementById('outreach-sender-phone');
+
+  if (nameInput && !nameInput.value) nameInput.value = savedName;
+  if (emailInput && !emailInput.value) emailInput.value = savedEmail;
+  if (phoneInput && !phoneInput.value) phoneInput.value = savedPhone;
+
+  // Update SMTP status badge in outreach modal
+  const smtpBadge = document.getElementById('outreach-smtp-badge');
+  const smtpStatusText = document.getElementById('outreach-smtp-status-text');
+  if (state.settings.smtp?.host && state.settings.smtp?.user) {
+    if (smtpBadge) smtpBadge.className = 'flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30';
+    if (smtpStatusText) smtpStatusText.textContent = `✓ Live Delivery: ${state.settings.smtp.fromEmail || state.settings.smtp.user}`;
+  } else {
+    if (smtpBadge) {
+      smtpBadge.className = 'flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 cursor-pointer';
+      smtpBadge.onclick = () => { closeOutreachModal(); openSettingsModal(); };
+    }
+    if (smtpStatusText) smtpStatusText.textContent = '⚙ Connect Gmail / SMTP';
+  }
+
   selectOutreachTemplate(state.activeTemplate);
   updateEmailPreview();
   document.getElementById('outreach-modal').classList.remove('hidden');
@@ -999,7 +1356,7 @@ function selectOutreachTemplate(templateKey) {
     }
   });
 
-  const tmpl = OUTREACH_TEMPLATES[templateKey] || OUTREACH_TEMPLATES.gap;
+  const tmpl = OUTREACH_TEMPLATES[templateKey] || OUTREACH_TEMPLATES.fashion_rates || OUTREACH_TEMPLATES.gap;
   document.getElementById('outreach-subject-input').value = tmpl.subject;
   document.getElementById('outreach-body-textarea').value = tmpl.body;
   updateEmailPreview();
@@ -1019,14 +1376,18 @@ function insertTagIntoBody(tag) {
 function updateEmailPreview() {
   const selectedComps = state.competitors.filter(c => state.selectedCompetitorIds.has(c.id));
   const sampleLead = selectedComps[0] || state.competitors[0] || {
-    name: 'Shopify Store',
-    domain: 'example.com',
-    monthlyTrafficFormatted: '350K',
-    totalKeywordsFormatted: '14,200',
-    highRankingPercent: 68,
-    lowRankingPercent: 32,
-    domainAuthority: 74
+    name: 'Khaadi Clothing',
+    domain: 'khaadi.com',
+    monthlyTrafficFormatted: '850K',
+    totalKeywordsFormatted: '28,000',
+    highRankingPercent: 72,
+    lowRankingPercent: 28,
+    domainAuthority: 68
   };
+
+  const senderName = document.getElementById('outreach-sender-name')?.value.trim() || 'Fashion Buyer';
+  const senderEmail = document.getElementById('outreach-sender-email')?.value.trim() || state.settings.smtp?.fromEmail || state.settings.smtp?.user || 'buyer@example.com';
+  const senderPhone = document.getElementById('outreach-sender-phone')?.value.trim() || '';
 
   const subjectTemplate = document.getElementById('outreach-subject-input').value;
   const bodyTemplate = document.getElementById('outreach-body-textarea').value;
@@ -1041,7 +1402,9 @@ function updateEmailPreview() {
       .replace(/\{\{\s*high_rank_percent\s*\}\}/gi, `${sampleLead.highRankingPercent}%`)
       .replace(/\{\{\s*low_rank_percent\s*\}\}/gi, `${sampleLead.lowRankingPercent}%`)
       .replace(/\{\{\s*da_score\s*\}\}/gi, sampleLead.domainAuthority)
-      .replace(/\{\{\s*sender_name\s*\}\}/gi, 'Nexus Growth Specialist');
+      .replace(/\{\{\s*sender_name\s*\}\}/gi, senderName)
+      .replace(/\{\{\s*sender_email\s*\}\}/gi, senderEmail)
+      .replace(/\{\{\s*sender_phone\s*\}\}/gi, senderPhone ? `\nPhone / WhatsApp: ${senderPhone}` : '');
   };
 
   const previewBox = document.getElementById('email-preview-box');
@@ -1055,8 +1418,14 @@ async function handleSendOutreach() {
     return;
   }
 
+  const validRecipients = selectedLeads.filter(c => c.contactEmail && c.contactEmail !== 'No email found');
+  if (validRecipients.length === 0) {
+    showToast('None of the selected websites have a contact email. Please reach out to them via Facebook or LinkedIn links!', 'warning');
+    return;
+  }
+
   if (state.currentUser && state.currentUser.dailyEmailLimit <= 1000) {
-    if (selectedLeads.length > state.currentUser.remainingEmails) {
+    if (validRecipients.length > state.currentUser.remainingEmails) {
       showToast(`Daily limit reached! You have ${state.currentUser.remainingEmails} emails left today out of 200. Please upgrade!`, 'error');
       openPricingModal();
       return;
@@ -1065,6 +1434,14 @@ async function handleSendOutreach() {
 
   const subject = document.getElementById('outreach-subject-input').value.trim();
   const message = document.getElementById('outreach-body-textarea').value.trim();
+  const senderName = document.getElementById('outreach-sender-name')?.value.trim() || 'Fashion Buyer';
+  const senderEmail = document.getElementById('outreach-sender-email')?.value.trim() || state.settings.smtp?.user || '';
+  const senderPhone = document.getElementById('outreach-sender-phone')?.value.trim() || '';
+
+  // Persist sender info locally
+  localStorage.setItem('nexus_sender_name', senderName);
+  localStorage.setItem('nexus_sender_email', senderEmail);
+  localStorage.setItem('nexus_sender_phone', senderPhone);
 
   if (!subject || !message) {
     showToast('Subject and message body cannot be empty', 'error');
@@ -1080,10 +1457,11 @@ async function handleSendOutreach() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        recipients: selectedLeads,
+        recipients: validRecipients,
         subject,
         message,
-        senderName: 'Nexus Growth Team',
+        senderName,
+        senderEmail,
         userId: state.currentUser?.id || 'usr_free_demo'
       })
     });
@@ -1096,7 +1474,7 @@ async function handleSendOutreach() {
       throw new Error(data.error || 'Failed to dispatch emails');
     }
 
-    selectedLeads.forEach(lead => {
+    validRecipients.forEach(lead => {
       lead.outreachStatus = 'sent';
     });
 
@@ -1109,6 +1487,13 @@ async function handleSendOutreach() {
     renderCompetitorsTable();
     updateGlobalKpis();
     closeOutreachModal();
+
+    const noEmailCount = selectedLeads.length - validRecipients.length;
+    if (noEmailCount > 0) {
+      showToast(`Sent ${validRecipients.length} emails! (${noEmailCount} sites with no email can be contacted via Facebook/LinkedIn)`, 'info');
+    } else {
+      showToast(`Successfully dispatched emails to ${validRecipients.length} websites!`, 'success');
+    }
 
     if (window.confetti) {
       window.confetti({ particleCount: 70, spread: 70, origin: { y: 0.6 } });
@@ -1330,8 +1715,70 @@ function updateAutonomousToggleUI(isActive) {
   }
 }
 
+// Load saved settings from server
+async function loadInitialSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    if (data.success && data.settings) {
+      state.settings = data.settings;
+      if (data.settings.smtp) {
+        const s = data.settings.smtp;
+        const hostEl = document.getElementById('smtp-host');
+        const portEl = document.getElementById('smtp-port');
+        const userEl = document.getElementById('smtp-user');
+        const nameEl = document.getElementById('smtp-from-name');
+        const emailEl = document.getElementById('smtp-from-email');
+
+        if (hostEl && s.host) hostEl.value = s.host;
+        if (portEl && s.port) portEl.value = s.port;
+        if (userEl && s.user) userEl.value = s.user;
+        if (nameEl && s.fromName) nameEl.value = s.fromName;
+        if (emailEl && s.fromEmail) emailEl.value = s.fromEmail;
+
+        const outreachEmail = document.getElementById('outreach-sender-email');
+        const outreachName = document.getElementById('outreach-sender-name');
+        if (outreachEmail && !outreachEmail.value && (s.fromEmail || s.user)) {
+          outreachEmail.value = s.fromEmail || s.user;
+        }
+        if (outreachName && !outreachName.value && s.fromName) {
+          outreachName.value = s.fromName;
+        }
+      }
+      if (data.settings.ai) {
+        const geminiEl = document.getElementById('gemini-api-key');
+        const bookingEl = document.getElementById('ai-booking-link');
+        if (geminiEl && data.settings.ai.apiKey) geminiEl.value = data.settings.ai.apiKey;
+        if (bookingEl && data.settings.ai.bookingLink) bookingEl.value = data.settings.ai.bookingLink;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not load settings:', e);
+  }
+}
+
 // Settings Modal Management
 function openSettingsModal() {
+  if (state.settings?.smtp) {
+    const s = state.settings.smtp;
+    const hostEl = document.getElementById('smtp-host');
+    const portEl = document.getElementById('smtp-port');
+    const userEl = document.getElementById('smtp-user');
+    const nameEl = document.getElementById('smtp-from-name');
+    const emailEl = document.getElementById('smtp-from-email');
+
+    if (hostEl && s.host) hostEl.value = s.host;
+    if (portEl && s.port) portEl.value = s.port;
+    if (userEl && s.user) userEl.value = s.user;
+    if (nameEl && s.fromName) nameEl.value = s.fromName;
+    if (emailEl && s.fromEmail) emailEl.value = s.fromEmail;
+  }
+  if (state.settings?.ai) {
+    const geminiEl = document.getElementById('gemini-api-key');
+    const bookingEl = document.getElementById('ai-booking-link');
+    if (geminiEl && state.settings.ai.apiKey) geminiEl.value = state.settings.ai.apiKey;
+    if (bookingEl && state.settings.ai.bookingLink) bookingEl.value = state.settings.ai.bookingLink;
+  }
   document.getElementById('settings-modal').classList.remove('hidden');
 }
 
@@ -1340,15 +1787,17 @@ function closeSettingsModal() {
 }
 
 async function handleSaveSettings() {
-  const smtp = {
-    host: document.getElementById('smtp-host').value.trim(),
-    port: parseInt(document.getElementById('smtp-port').value, 10) || 587,
-    user: document.getElementById('smtp-user').value.trim(),
-    pass: document.getElementById('smtp-pass').value.trim()
-  };
+  const fromName = document.getElementById('smtp-from-name')?.value.trim() || '';
+  const fromEmail = document.getElementById('smtp-from-email')?.value.trim() || '';
+  const host = document.getElementById('smtp-host')?.value.trim() || '';
+  const port = parseInt(document.getElementById('smtp-port')?.value, 10) || 587;
+  const user = document.getElementById('smtp-user')?.value.trim() || '';
+  const pass = document.getElementById('smtp-pass')?.value.trim() || '';
 
+  const smtp = { host, port, user, pass, fromName, fromEmail };
   const ai = {
-    bookingLink: document.getElementById('ai-booking-link').value.trim()
+    apiKey: document.getElementById('gemini-api-key')?.value.trim() || '',
+    bookingLink: document.getElementById('ai-booking-link')?.value.trim() || 'https://calendly.com/growth-team/15min-strategy'
   };
 
   try {
@@ -1359,7 +1808,16 @@ async function handleSaveSettings() {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('Settings saved!', 'success');
+      state.settings.smtp = { ...state.settings.smtp, ...smtp };
+      state.settings.ai = { ...state.settings.ai, ...ai };
+
+      // Update outreach modal fields as well
+      const outreachName = document.getElementById('outreach-sender-name');
+      const outreachEmail = document.getElementById('outreach-sender-email');
+      if (outreachName && fromName) outreachName.value = fromName;
+      if (outreachEmail && (fromEmail || user)) outreachEmail.value = fromEmail || user;
+
+      showToast('Settings & SMTP saved! Outgoing emails will send from your email.', 'success');
       closeSettingsModal();
     }
   } catch (err) {

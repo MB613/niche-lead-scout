@@ -68,8 +68,9 @@ async function sendBatchOutreach({ recipients, subjectTemplate, messageTemplate,
       high_rank_percent: `${lead.highRankingPercent || 65}%`,
       low_rank_percent: `${lead.lowRankingPercent || 35}%`,
       da_score: lead.domainAuthority || 70,
-      sender_name: senderName || 'Growth Team',
-      sender_email: senderEmail || 'outreach@growthnexus.io'
+      sender_name: senderName || 'Product Inquiries Team',
+      sender_email: senderEmail || (smtpConfig ? smtpConfig.user : 'user@example.com'),
+      sender_phone: ''
     };
 
     const personalizedSubject = renderTemplate(subjectTemplate, variables);
@@ -78,10 +79,23 @@ async function sendBatchOutreach({ recipients, subjectTemplate, messageTemplate,
     let status = 'sent';
     let errorMessage = null;
 
+    if (!lead.contactEmail || lead.contactEmail === 'No email found') {
+      results.push({
+        leadId: lead.id,
+        domain: lead.domain,
+        email: null,
+        status: 'skipped',
+        error: 'No email found for this website (reachable via social profile)'
+      });
+      continue;
+    }
+
     if (transporter && !isSimulation) {
       try {
+        const fromAddress = senderEmail || smtpConfig.user;
         await transporter.sendMail({
-          from: `"${senderName || 'SEO Growth'}" <${senderEmail || smtpConfig.user}>`,
+          from: `"${senderName || 'Inquiry Team'}" <${smtpConfig.user}>`,
+          replyTo: fromAddress,
           to: lead.contactEmail,
           subject: personalizedSubject,
           text: personalizedBody,
@@ -89,7 +103,7 @@ async function sendBatchOutreach({ recipients, subjectTemplate, messageTemplate,
             ${personalizedBody.replace(/\n/g, '<br/>')}
             <br/><br/>
             <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
-            <p style="font-size: 11px; color: #94a3b8;">Sent via NexusRank Outreach Engine to ${lead.contactEmail}. To opt out, reply with 'unsubscribe'.</p>
+            <p style="font-size: 11px; color: #94a3b8;">Sent to ${lead.contactEmail}. To opt out, reply with 'unsubscribe'.</p>
           </div>`
         });
       } catch (err) {

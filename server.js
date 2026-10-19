@@ -4,7 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const localtunnel = require('localtunnel');
 const { analyzeTargetWebsite, formatNumber } = require('./services/nicheDetector');
-const { getCompetitorsForNiche } = require('./services/competitorEngine');
+const { getCompetitorsForNiche, scrapeWebsiteContactEmail } = require('./services/competitorEngine');
 const { sendBatchOutreach, verifySmtpConnection, getEmailLogs, getCampaignHistory } = require('./services/emailService');
 const { generateSmartReply, recordIncomingReply, getConversations, updateConversationStatus, classifyReplyIntent } = require('./services/aiReplyBot');
 const {
@@ -28,23 +28,46 @@ app.use(express.static(path.join(__dirname, 'public')));
 let publicTunnelUrl = null;
 
 // Persistent in-memory session cache for current exploration
+const DATA_DIR = path.join(__dirname, 'data');
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+const SMTP_CONFIG_FILE = path.join(DATA_DIR, 'smtp_config.json');
+const APP_CONFIG_FILE = path.join(DATA_DIR, 'app_config.json');
+let savedSmtp = {};
+let savedAppConfig = {};
+try {
+  if (fs.existsSync(SMTP_CONFIG_FILE)) {
+    savedSmtp = JSON.parse(fs.readFileSync(SMTP_CONFIG_FILE, 'utf8'));
+  }
+} catch (e) {
+  console.warn('Could not load saved SMTP config:', e.message);
+}
+try {
+  if (fs.existsSync(APP_CONFIG_FILE)) {
+    savedAppConfig = JSON.parse(fs.readFileSync(APP_CONFIG_FILE, 'utf8'));
+  }
+} catch (e) {
+  console.warn('Could not load saved app config:', e.message);
+}
+
 let currentSession = {
   target: null,
   allCompetitors: [],
   currentPage: 1,
   autonomousAutoReply: true,
   smtpSettings: {
-    host: '',
-    port: 587,
-    user: '',
-    pass: '',
-    secure: false,
-    fromName: 'Nexus SEO Growth',
-    fromEmail: 'outreach@growthnexus.io'
+    host: savedSmtp.host || '',
+    port: savedSmtp.port || 587,
+    user: savedSmtp.user || '',
+    pass: savedSmtp.pass || '',
+    secure: savedSmtp.secure || false,
+    fromName: savedSmtp.fromName || 'Inquiry Specialist',
+    fromEmail: savedSmtp.fromEmail || (savedSmtp.user || 'user@example.com')
   },
   aiSettings: {
-    apiKey: '',
-    bookingLink: 'https://calendly.com/growth-team/15min-strategy'
+    apiKey: process.env.GEMINI_API_KEY || savedAppConfig.apiKey || '',
+    bookingLink: savedAppConfig.bookingLink || 'https://calendly.com/growth-team/15min-strategy'
   }
 };
 
@@ -129,7 +152,8 @@ app.post('/api/analyze-target', async (req, res) => {
       return res.status(400).json({ error: 'Please provide a valid website URL' });
     }
 
-    const targetInfo = await analyzeTargetWebsite(url);
+    const geminiKey = currentSession.aiSettings?.apiKey || process.env.GEMINI_API_KEY || null;
+    const targetInfo = await analyzeTargetWebsite(url, geminiKey);
     currentSession.target = targetInfo;
     currentSession.allCompetitors = [];
     currentSession.currentPage = 1;
@@ -139,6 +163,7 @@ app.post('/api/analyze-target', async (req, res) => {
       category: targetInfo.category,
       subNiche: targetInfo.subNiche,
       targetDomain: targetInfo.domain,
+      targetTraffic: targetInfo.traffic || 0,
       page: 1,
       limit: 50
     });
@@ -177,6 +202,7 @@ app.post('/api/discover-competitors', (req, res) => {
       category: targetInfo.category,
       subNiche: targetInfo.subNiche,
       targetDomain: targetInfo.domain,
+      targetTraffic: targetInfo.traffic || 0,
       page: parseInt(page, 10),
       limit: parseInt(limit, 10)
     });
@@ -419,14 +445,47 @@ app.post('/api/toggle-autonomous-mode', (req, res) => {
 // 5. SETTINGS & EXPORTS
 // ==========================================
 
+// Get Current Settings
+app.get('/api/settings', (req, res) => {
+  res.json({
+    success: true,
+    settings: {
+      smtp: {
+        host: currentSession.smtpSettings.host,
+        port: currentSession.smtpSettings.port,
+        user: currentSession.smtpSettings.user,
+        fromName: currentSession.smtpSettings.fromName,
+        fromEmail: currentSession.smtpSettings.fromEmail,
+        hasPass: !!currentSession.smtpSettings.pass
+      },
+      ai: {
+        hasApiKey: !!currentSession.aiSettings.apiKey,
+        apiKey: currentSession.aiSettings.apiKey || '',
+        bookingLink: currentSession.aiSettings.bookingLink
+      },
+      autonomousAutoReply: currentSession.autonomousAutoReply
+    }
+  });
+});
+
 // Update Settings (SMTP & AI)
 app.post('/api/settings', (req, res) => {
   const { smtp, ai, autonomousAutoReply } = req.body;
   if (smtp) {
     currentSession.smtpSettings = { ...currentSession.smtpSettings, ...smtp };
+    try {
+      fs.writeFileSync(SMTP_CONFIG_FILE, JSON.stringify(currentSession.smtpSettings, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('Could not save SMTP config to disk:', e.message);
+    }
   }
   if (ai) {
     currentSession.aiSettings = { ...currentSession.aiSettings, ...ai };
+    try {
+      fs.writeFileSync(APP_CONFIG_FILE, JSON.stringify(currentSession.aiSettings, null, 2), 'utf8');
+    } catch (e) {
+      console.warn('Could not save app config to disk:', e.message);
+    }
   }
   if (typeof autonomousAutoReply === 'boolean') {
     currentSession.autonomousAutoReply = autonomousAutoReply;
@@ -445,11 +504,47 @@ app.post('/api/settings', (req, res) => {
       },
       ai: {
         hasApiKey: !!currentSession.aiSettings.apiKey,
+        apiKey: currentSession.aiSettings.apiKey || '',
         bookingLink: currentSession.aiSettings.bookingLink
       },
       autonomousAutoReply: currentSession.autonomousAutoReply
     }
   });
+});
+
+// Live Email Extraction / Verification Endpoint for any competitor
+app.post('/api/extract-live-email', async (req, res) => {
+  try {
+    const { domain } = req.body;
+    if (!domain) {
+      return res.status(400).json({ error: 'Domain is required' });
+    }
+    const result = await scrapeWebsiteContactEmail(domain);
+    
+    // Update in current session if exists
+    const comp = currentSession.allCompetitors.find(c => c.domain.toLowerCase() === domain.toLowerCase());
+    if (comp) {
+      comp.contactEmail = result.email;
+      comp.emailStatus = result.email ? 'Verified' : 'No email found';
+      comp.isVerifiedEmail = !!result.email;
+      comp.hasEmail = !!result.email;
+      comp.socialLinks = result.socialLinks;
+    }
+
+    res.json({
+      success: true,
+      domain,
+      email: result.email,
+      emailStatus: result.email ? 'Verified' : 'No email found',
+      hasEmail: !!result.email,
+      socialLinks: result.socialLinks,
+      source: result.source,
+      verified: result.verified
+    });
+  } catch (error) {
+    console.error('Email extraction error:', error);
+    res.status(500).json({ error: 'Failed to extract email: ' + error.message });
+  }
 });
 
 // Verify SMTP Connection
@@ -511,6 +606,9 @@ app.get('/api/export-csv', (req, res) => {
     'Domain Authority (DA)',
     'Country',
     'Contact Email',
+    'Email Status',
+    'Facebook Link',
+    'LinkedIn Link',
     'Outreach Status'
   ];
 
@@ -531,7 +629,10 @@ app.get('/api/export-csv', (req, res) => {
     c.rankingTiers.page6_10.count,
     c.domainAuthority,
     `"${c.country}"`,
-    `"${c.contactEmail}"`,
+    `"${c.contactEmail || 'No email found'}"`,
+    `"${c.emailStatus || 'No email found'}"`,
+    `"${c.socialLinks?.facebook || ''}"`,
+    `"${c.socialLinks?.linkedin || ''}"`,
     `"${c.outreachStatus}"`
   ]);
 
